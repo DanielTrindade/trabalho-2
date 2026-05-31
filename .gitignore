@@ -1,0 +1,30 @@
+# ---- Editor / IDE / agente ----
+.vscode/
+.claude/
+.idea/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# ---- Kotlin / JVM ----
+*.jar
+*.class
+build/
+.gradle/
+
+# ---- Parte III: Nota Secreta (não versionar) ----
+# Modelo LLM, logs de partida e base de músicas não fazem parte da entrega.
+*.gguf
+logs/
+brazilian_songs.csv
+
+# ---- Sistema ----
+.DS_Store
+Thumbs.db
