@@ -23,6 +23,7 @@ build/
 
 # ---- Parte III: Nota Secreta (não versionar) ----
 # Modelo LLM, logs de partida e base de músicas não fazem parte da entrega.
+*.zip
 *.gguf
 logs/
 brazilian_songs.csv
