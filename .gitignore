@@ -11,6 +11,8 @@ __pycache__/
 venv/
 env/
 .pytest_cache/
+pytest-cache-files-*/
+tmppytest-cache-*/
 .mypy_cache/
 
 # ---- Kotlin / JVM ----
