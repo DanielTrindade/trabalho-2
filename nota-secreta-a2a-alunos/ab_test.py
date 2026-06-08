@@ -143,14 +143,22 @@ async def play_one_game(
 
 
 async def main() -> None:
+    global V1_SCRIPT, V2_SCRIPT
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default=None, help="Caminho do .gguf. Sem isso, sobe mock e o teste aborta.")
     parser.add_argument("--games", type=int, default=10)
     parser.add_argument("--db", default=str(ROOT / "brazilian_songs.csv"))
     parser.add_argument("--llm-max-concurrency", type=int, default=1)
+    parser.add_argument("--baseline", default=V1_SCRIPT, help="Arquivo do agente baseline (rótulo v1).")
+    parser.add_argument("--challenger", default=V2_SCRIPT, help="Arquivo do agente desafiante (rótulo v2).")
     parser.add_argument("--allow-mock", action="store_true",
                         help="Permite rodar mesmo em modo mock (apenas para depurar a infra).")
     args = parser.parse_args()
+
+    V1_SCRIPT = args.baseline
+    V2_SCRIPT = args.challenger
+    print(f"[ab_test] v1 (baseline)  = {V1_SCRIPT}")
+    print(f"[ab_test] v2 (desafiante) = {V2_SCRIPT}")
 
     llm_proc: subprocess.Popen[str] | None = None
     try:
