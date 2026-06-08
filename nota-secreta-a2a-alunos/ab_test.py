@@ -28,8 +28,9 @@ import aiohttp
 
 ROOT = Path(__file__).resolve().parent
 
+# Defaults; sobrescreva o desafiante com --challenger para comparar variantes.
 V1_SCRIPT = "llm_agent.py"
-V2_SCRIPT = "llm_agent_v2.py"
+V2_SCRIPT = "llm_agent.py"
 
 
 def find_free_port(start_port: int, host: str = "127.0.0.1", max_tries: int = 300) -> int:

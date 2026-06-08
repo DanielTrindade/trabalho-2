@@ -12,7 +12,6 @@ Ela usa apenas título e letra truncada recebidos durante a partida.
 """
 
 import argparse
-import json
 import logging
 import re
 from typing import Any, Dict, List, Sequence
@@ -23,6 +22,9 @@ from fasta2a import A2AApp, tool
 app = A2AApp(name="LLMAgent")
 
 LOGGER = logging.getLogger(__name__)
+
+# Saída degenerada conhecida do serviço LLM em modo mock.
+_MOCK_SENTINELS = {"memória tempo cidade", "memoria tempo cidade"}
 
 
 class LLMAgent(BaseAgent):
@@ -71,6 +73,18 @@ class LLMAgent(BaseAgent):
         )
 
         clue = self._clean_clue(raw, lyrics=lyrics, title=title, max_words=max_words)
+
+        # Guarda de robustez + auto-consistência: se a dica degenerou (mock do
+        # serviço LLM / timeout) ou está vaga demais (não aponta nem para a
+        # própria carta dentro da mão), troca por uma dica temática da letra.
+        # Assim o narrador não joga a rodada fora quando o LLM não coopera.
+        if self._is_degenerate_clue(clue) or not self._clue_points_to_card(clue):
+            fallback = self._fallback_thematic_clue(lyrics, title, max_words=max_words)
+            fallback = self._remove_title_words(fallback, title, max_words=max_words)
+            fallback = " ".join(fallback.split()[:max_words]).strip()
+            if fallback and not self._is_degenerate_clue(fallback):
+                clue = fallback
+
         self.clue_history.append(clue)
         self.round_memory.append({"role": "narrator", "title": title, "clue": clue})
         LOGGER.info("[%s] Dica gerada: %s", self.name, clue)
@@ -313,6 +327,36 @@ class LLMAgent(BaseAgent):
 
         return " ".join(clue.split()[:max_words]).strip()
 
+    def _is_degenerate_clue(self, clue: str) -> bool:
+        """Detecta dica vazia/pobre ou a saída fixa do mock do serviço LLM."""
+        norm = self._normalize_text_for_match(clue)
+        if not norm:
+            return True
+        if norm in _MOCK_SENTINELS:
+            return True
+        return len(self._extract_keywords(clue)) < 2
+
+    def _clue_points_to_card(self, clue: str) -> bool:
+        """A dica deve apontar para a carta do narrador dentro da própria mão.
+
+        Proxy de "não é vaga demais": se, entre as cartas da mão, a carta
+        escolhida não fica em 1º pela nossa pontuação semântica, a dica
+        provavelmente não levará ninguém à carta certa -> narrador tira 0.
+        """
+        if not self.hand or self.last_narrator_card is None:
+            return True
+        target_id = self.last_narrator_card.get("id")
+        scored = sorted(
+            ((self._semantic_score(card, clue), card.get("id")) for card in self.hand),
+            reverse=True,
+        )
+        if not scored:
+            return True
+        best_score, best_id = scored[0]
+        if best_score <= 0.0:
+            return False
+        return best_id == target_id
+
     def _remove_title_words(self, clue: str, title: str, max_words: int) -> str:
         if not title:
             return clue
@@ -382,22 +426,23 @@ class LLMAgent(BaseAgent):
         out: List[int] = []
         for raw in re.findall(r"\d+", response):
             idx = int(raw)
-            if 1 <= idx <= n_options and idx >= n_options:
+            # Aceita numeração 1-based: um índice == n_options mapeia para o
+            # último (n_options-1). Os demais índices válidos seguem 0-based.
+            if idx == n_options:
                 idx -= 1
             if 0 <= idx < n_options and idx != forbidden_idx and idx not in out:
                 out.append(idx)
         return out
 
     def _mock_llm_response(self, prompt: str, max_tokens: int = 40) -> str:
-        """Mock mais útil para testes locais do agente.
+        """Fallback local quando a requisição ao serviço LLM falha.
 
-        O serviço mock fornecido pelo professor retorna sempre a mesma frase.
-        Este fallback só é usado quando a requisição falha; mantemos uma saída
-        estruturada para não mascarar erros de parsing durante testes unitários.
+        Para prompts de ranking devolvemos vazio (sem dígitos) de propósito:
+        assim a heurística decide sozinha, em vez de a identidade [0,1,2,3]
+        enviesar o Borda count para o índice 0.
         """
         if "\"ranking\"" in prompt:
-            numbers = sorted({int(x) for x in re.findall(r"^(\d+):", prompt, flags=re.MULTILINE)})
-            return json.dumps({"ranking": numbers}, ensure_ascii=False)
+            return "{}"
         return self._fallback_thematic_clue(prompt, "", max_words=min(6, max_tokens))
 
 
